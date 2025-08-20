@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Build environment for FreeRTOS applications on POSIX host
+  build:
+    build:
+      context: .
+      dockerfile: Dockerfile.freertos-posix
+      target: development
+    image: osmocom-bb-freertos:build-env
+    container_name: osmocom-bb-build
+    volumes:
+      - ./configs:/home/osmocom/configs:ro
+      - ./logs:/home/osmocom/logs
+      - build-cache:/workspace/build-host
+      - freertos-cache:/workspace/build-freertos
+    ports:
+      - "4729:4729"  # GSMTAP
+      - "2775:2775"  # L1CTL socket
+    networks:
+      - osmocom
+    command: ["sleep", "infinity"]  # Keep container running for interactive use
+
+  # Development environment with source mounted for live editing
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.freertos-posix
+      target: development
+    image: osmocom-bb-freertos:dev
+    container_name: osmocom-bb-dev
+    volumes:
+      - .:/workspace-live  # Live source code
+      - dev-build-cache:/workspace-live/build-host
+      - dev-freertos-cache:/workspace-live/build-freertos
+    working_dir: /workspace-live
+    networks:
+      - osmocom
+    command: ["sleep", "infinity"]
+
+networks:
+  osmocom:
+    driver: bridge
+
+volumes:
+  build-cache:
+  freertos-cache:
+  dev-build-cache:
+  dev-freertos-cache:

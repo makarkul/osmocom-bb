@@ -1,0 +1,38 @@
+# Build artifacts
+*.o
+*.lo
+*.a
+*.so
+*.la
+.libs/
+.deps/
+Makefile
+Makefile.in
+config.h
+config.log
+config.status
+configure
+aclocal.m4
+autom4te.cache/
+libtool
+stamp-h1
+
+# CMake
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+src/shared/libosmocore/

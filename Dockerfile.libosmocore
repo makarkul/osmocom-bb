@@ -1,0 +1,98 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies 
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    gcc \
+    g++ \
+    make \
+    git \
+    autotools-dev \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    libtalloc-dev \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# Copy libosmocore and our compatibility layer
+COPY src/shared/libosmocore/ ./libosmocore/
+COPY src/compat/freertos/ ./compat/freertos/
+
+# Add compatibility layer to libosmocore build
+RUN cd libosmocore && \
+    echo "Adding FreeRTOS socket compatibility layer..." && \
+    mkdir -p include/osmocom/core && \
+    rm -f include/osmocom/core/socket.h && \
+    cp /src/compat/freertos/socket.h include/osmocom/core/ && \
+    mkdir -p src/core && \
+    cp /src/compat/freertos/socket.c src/core/ && \
+    mkdir -p include && \
+    cp /src/compat/freertos/netdb.h include/ && \
+    mkdir -p include/sys include/netinet include/arpa && \
+    cp /src/compat/freertos/sys/socket.h include/sys/ && \
+    cp /src/compat/freertos/netinet/in.h include/netinet/ && \
+    cp /src/compat/freertos/arpa/inet.h include/arpa/ && \
+    echo "Updating header references to use new socket.h name..." && \
+    sed -i 's|socket_compat\.h|socket.h|g' include/arpa/inet.h && \
+    sed -i 's|socket_compat\.h|socket.h|g' include/sys/socket.h && \
+    sed -i 's|socket_compat\.h|socket.h|g' include/netinet/in.h && \
+    sed -i 's|osmocom/core/socket_compat\.h|osmocom/core/socket.h|g' include/osmocom/gsm/gsm0808.h && \
+    echo "Removing Linux-specific files for embedded build..." && \
+    rm -f src/core/netns.c && \
+    rm -f include/osmocom/core/netns.h && \
+    rm -f src/core/gsmtap_util.c && \
+    rm -f src/core/logging_gsmtap.c && \
+    rm -f include/osmocom/core/gsmtap_util.h && \
+    rm -f src/core/socket.c && \
+    rm -f src/core/tun.c && \
+    rm -f src/core/netdev.c && \
+    rm -f src/core/stats_tcp.c && \
+    echo "Replacing sockaddr_str.c with embedded-friendly stub version..." && \
+    cp src/core/sockaddr_str_embedded.c src/core/sockaddr_str.c && \
+    echo "Modifying Makefile.am to include compatibility layer and exclude problematic files..." && \
+    sed -i '/utils\.c \\/a\\tsocket.c \\' src/core/Makefile.am && \
+    sed -i '/socket\.h \\/d' include/osmocom/core/Makefile.am && \
+    sed -i '/utils\.h \\/a\\tsocket.h \\' include/osmocom/core/Makefile.am && \
+    sed -i '/socket_compat\.h \\/d' include/osmocom/core/Makefile.am && \
+    sed -i '/gsmtap_util\.h \\/d' include/osmocom/core/Makefile.am && \
+    sed -i '/gsmtap_util\.c \\/d' src/core/Makefile.am && \
+    sed -i '/logging_gsmtap\.c \\/d' src/core/Makefile.am && \
+    sed -i '/netns\.h \\/d' include/osmocom/core/Makefile.am && \
+    sed -i '/netns\.c \\/d' src/core/Makefile.am && \
+    sed -i '/socket\.c \\/d' src/core/Makefile.am && \
+    sed -i '/tun\.c \\/d' src/core/Makefile.am && \
+    sed -i '/netdev\.c \\/d' src/core/Makefile.am && \
+    sed -i '/stats_tcp\.c \\/d' src/core/Makefile.am
+
+# Build with autotools and FreeRTOS compatibility
+RUN cd libosmocore && \
+    autoreconf -fi && \
+    CPPFLAGS="-I/src/compat/freertos -DTARGET_FREERTOS=1" \
+    CFLAGS="-Os -ffunction-sections -fdata-sections -Wall -std=gnu11 -Wno-return-type -Wno-int-conversion -Wno-unused-function" \
+    ./configure \
+        --enable-embedded \
+        --enable-pseudotalloc \
+        --disable-shared \
+        --disable-tests \
+        --disable-doxygen \
+        --disable-utilities \
+        --disable-uring \
+        --disable-pcsc \
+        --disable-libusb \
+        --disable-gnutls \
+        --disable-libmnl \
+        --disable-libsctp \
+        ac_cv_have_decl_HAVE_SYS_SOCKET_H=yes \
+        --prefix=/tmp/install && \
+    make V=1 && \
+    make install && \
+    echo "Build successful!" && \
+    ls -la /tmp/install/lib/ && \
+    size /tmp/install/lib/libosmocore.a
