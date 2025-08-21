@@ -88,92 +88,15 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
-COPY src/shared/libosmocore ./libosmocore
+RUN git clone https://github.com/makarkul/libosmocore-freertos.git libosmocore && \
+    cd libosmocore && \
+    git checkout freertos-adaptations
 
-# Add FreeRTOS+TCP dependencies and socket compatibility layer
-COPY deps/freertos-plus-tcp ./freertos-plus-tcp
-COPY deps/freertos-kernel ./freertos-kernel
-COPY src/compat/freertos ./compat/freertos
+# No additional dependencies needed - GitHub repo already has FreeRTOS adaptations
 
-# Remove Linux-specific files that cause issues in embedded builds
-RUN cd libosmocore && \
-    echo "Removing Linux-specific files for embedded build..." && \
-    rm -f src/core/netns.c && \
-    sed -i '/netns\.c/d' src/core/Makefile.am && \
-    rm -f include/osmocom/core/netns.h && \
-    sed -i '/netns\.h/d' include/osmocom/core/Makefile.am && \
-    echo "Removing GSMTAP files that require socket functionality..." && \
-    rm -f src/core/gsmtap_util.c && \
-    sed -i '/gsmtap_util\.c/d' src/core/Makefile.am && \
-    rm -f src/core/logging_gsmtap.c && \
-    sed -i '/logging_gsmtap\.c/d' src/core/Makefile.am && \
-    rm -f include/osmocom/core/gsmtap_util.h && \
-    sed -i '/gsmtap_util\.h/d' include/osmocom/core/Makefile.am && \
-    echo "Commenting out GSMTAP include in logging.c..." && \
-    sed -i 's|#include <osmocom/core/gsmtap_util.h>|// #include <osmocom/core/gsmtap_util.h> // Disabled for embedded build|' src/core/logging.c && \
-    echo "Disabling GSMTAP functionality in logging.c..." && \
-    sed -i 's|case LOG_TGT_TYPE_GSMTAP:|// case LOG_TGT_TYPE_GSMTAP: // Disabled for embedded build|g' src/core/logging.c && \
-    sed -i 's|gsmtap_source_free|// gsmtap_source_free // Disabled for embedded build|g' src/core/logging.c && \
-    echo "Removing socket utilities that require full POSIX socket support..." && \
-    rm -f src/core/socket.c && \
-    sed -i '/socket\.c/d' src/core/Makefile.am && \
-    echo "Removing TUN/TAP and other Linux network interface files..." && \
-    rm -f src/core/tun.c && \
-    sed -i '/tun\.c/d' src/core/Makefile.am && \
-    rm -f src/core/netdev.c && \
-    sed -i '/netdev\.c/d' src/core/Makefile.am && \
-    echo "Removing socket address utilities that require full POSIX socket support..." && \
-    rm -f src/core/sockaddr_str.c && \
-    sed -i '/sockaddr_str\.c/d' src/core/Makefile.am && \
-    echo "Removing stats TCP interface that requires socket support..." && \
-    rm -f src/core/stats_tcp.c && \
-    sed -i '/stats_tcp\.c/d' src/core/Makefile.am
-
-# Add socket compatibility layer to libosmocore build and extend pseudotalloc
-RUN cd libosmocore && \
-    echo "Adding FreeRTOS socket compatibility layer..." && \
-    cp /workspace/compat/freertos/socket_compat.h include/osmocom/core/ && \
-    cp /workspace/compat/freertos/socket_compat.c src/core/ && \
-    sed -i 's/\(^[[:space:]]*utils\.c[[:space:]]*\\\)$/\1\n\tsocket_compat.c \\/' src/core/Makefile.am && \
-    sed -i 's/\(^[[:space:]]*utils\.h[[:space:]]*\\\)$/\1\n\tsocket_compat.h \\/' include/osmocom/core/Makefile.am && \
-    mkdir -p include/sys include/netinet include/arpa && \
-    cp /workspace/compat/freertos/sys/socket.h include/sys/ && \
-    cp /workspace/compat/freertos/netinet/in.h include/netinet/ && \
-    cp /workspace/compat/freertos/arpa/inet.h include/arpa/ && \
-    echo "Checking if talloc_realloc is already present in pseudotalloc..." && \
-    if ! grep -q "talloc_realloc_size" src/pseudotalloc/talloc.h; then \
-        echo "Adding missing talloc_realloc declaration to pseudotalloc.h..." && \
-        echo 'void *talloc_realloc_size(const void *ctx, void *ptr, size_t size);' >> src/pseudotalloc/talloc.h && \
-        echo '#define talloc_realloc(ctx, ptr, type, count) (type *)talloc_realloc_size(ctx, ptr, sizeof(type) * count)' >> src/pseudotalloc/talloc.h; \
-    fi && \
-    echo "talloc_realloc functionality is already present in pseudotalloc implementation."
-
-# Build libpseudotalloc first, then configure with it
+# Build libosmocore with FreeRTOS adaptations
 RUN cd libosmocore && \
     autoreconf -fi && \
-    echo "Building libpseudotalloc first..." && \
-    cd src/pseudotalloc && \
-    gcc -shared -fPIC -o libpseudotalloc.so pseudotalloc.c && \
-    gcc -fPIC -c -o pseudotalloc.o pseudotalloc.c && \
-    ar rcs libpseudotalloc.a pseudotalloc.o && \
-    echo "Creating talloc.pc for pkg-config..." && \
-    cat > talloc.pc << 'PCEOF'
-prefix=/workspace/libosmocore/src/pseudotalloc
-exec_prefix=${prefix}
-libdir=${exec_prefix}
-includedir=${prefix}
-
-Name: talloc
-Description: Pseudotalloc - talloc compatibility for embedded systems
-Version: 2.1.0
-Libs: -L${libdir} -lpseudotalloc
-Cflags: -I${includedir}
-PCEOF
-
-# Test libosmocore configuration and build with FreeRTOS+TCP socket support  
-RUN cd libosmocore && \
-    PKG_CONFIG_PATH="/workspace/libosmocore/src/pseudotalloc:$PKG_CONFIG_PATH" \
-    CPPFLAGS="-I/workspace/libosmocore/include -I/workspace/freertos-plus-tcp/include -I/workspace/freertos-kernel/include -I/workspace/compat/freertos -DTARGET_FREERTOS=1 -DFREERTOS_PLUS_TCP=1" \
     echo "=== libosmocore Configuration Summary ===" && \
     echo "ENABLED features:" && \
     echo "  ✓ embedded build (--enable-embedded)" && \

@@ -25,7 +25,7 @@ This repository contains **OsmocomBB** (Osmocom Baseband), an open-source GSM ba
 ### Code Structure
 - **Target**: ARM firmware for Calypso DSP phones (Layer 1 radio functions)
 - **Host**: Linux applications implementing Layers 2/3 of GSM protocol stack
-- **Shared**: libosmocore library providing common utilities and GSM protocol support
+- **Shared**: libosmocore-freertos library (from https://github.com/makarkul/libosmocore-freertos.git) providing common utilities and GSM protocol support with FreeRTOS adaptations
 
 ### Key Interfaces
 - **L1CTL**: Communication protocol between Layer 1 (phone) and Layer 2/3 (PC)

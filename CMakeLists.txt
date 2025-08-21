@@ -34,7 +34,7 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/src/include
-    ${CMAKE_SOURCE_DIR}/src/shared/libosmocore/include
+    ${LIBOSMOCORE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/src/host/layer23/include
 )
 
@@ -49,10 +49,11 @@ endif()
 include(ExternalProject)
 
 ExternalProject_Add(libosmocore
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/src/shared/libosmocore
-    CONFIGURE_COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}/src/shared/libosmocore && autoreconf -fi && ./configure --prefix=${CMAKE_BINARY_DIR}/libosmocore-install --enable-embedded --disable-shared --disable-tests --disable-doxygen --disable-utilities --disable-uring --disable-libsctp --disable-sctp-tests --disable-uring-tests"
-    BUILD_COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}/src/shared/libosmocore && make -j${CMAKE_BUILD_PARALLEL_LEVEL}"
-    INSTALL_COMMAND sh -c "cd ${CMAKE_SOURCE_DIR}/src/shared/libosmocore && make install"
+    GIT_REPOSITORY https://github.com/makarkul/libosmocore-freertos.git
+    GIT_TAG freertos-adaptations
+    CONFIGURE_COMMAND sh -c "cd <SOURCE_DIR> && autoreconf -fi && ./configure --prefix=${CMAKE_BINARY_DIR}/libosmocore-install --enable-embedded --disable-shared --disable-tests --disable-doxygen --disable-utilities --disable-uring --disable-libsctp --disable-sctp-tests --disable-uring-tests"
+    BUILD_COMMAND sh -c "cd <SOURCE_DIR> && make -j${CMAKE_BUILD_PARALLEL_LEVEL}"
+    INSTALL_COMMAND sh -c "cd <SOURCE_DIR> && make install"
     BUILD_IN_SOURCE 1
 )
 
