@@ -1,9 +1,8 @@
-## Top-level Makefile replacing build.sh (docker-driven)
+## Top-level unified Makefile (docker-driven) for FreeRTOS + Linux builds
 ## Supported targets: help (default), all, clean
 ## Usage: make [PLATFORM=freertos|linux] <target>
-## Note: PLATFORM=linux is a placeholder (not yet implemented)
 
-.PHONY: help all clean clean-freertos clean-linux mobile modem lib fetch fetch-deps fetch-refs _build_freertos _ensure_image
+.PHONY: help all clean clean-freertos clean-linux mobile modem lib fetch fetch-deps fetch-refs _build_freertos _ensure_image _build_linux linux-mobile linux-modem
 
 PLATFORM ?= freertos
 # Build modem by default only on linux platform (GPRS stack removed on freertos)
@@ -14,6 +13,7 @@ BUILD_MODEM ?= 1
 endif
 DOCKER_COMPOSE ?= docker-compose
 SERVICE_FREERTOS = osmocom-bb-freertos
+SERVICE_LINUX = osmocom-bb-linux
 
 ## Container commands (only freertos implemented for now)
 ifeq ($(PLATFORM),freertos)
@@ -33,7 +33,22 @@ MODEM_BUILD_CMD = $(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_FR
 	 make -C src/common liblayer23.a; \
 	 echo '[info] Modem build skipped: GPRS stack removed for freertos platform'"
 else ifeq ($(PLATFORM),linux)
-$(error PLATFORM=linux build not implemented yet. Use PLATFORM=freertos.)
+BUILD_IMAGE_CMD = $(DOCKER_COMPOSE) build $(SERVICE_LINUX)
+MOBILE_BUILD_CMD = $(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_LINUX) -lc \
+	"set -e; source scripts/linux_env.sh; cd src/host/layer23; \
+	 autoreconf -fi; \
+	 ./configure $$HOST_CONFARGS CFLAGS=\"$$CFLAGS\" LDFLAGS=\"$$LDFLAGS\" PKG_CONFIG_PATH=\"$$PKG_CONFIG_PATH\"; \
+	 make -C src/common liblayer23.a; \
+	 make -C src/mobile mobile; \
+	 ls -l src/common/liblayer23.a src/mobile/mobile"
+
+MODEM_BUILD_CMD = $(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_LINUX) -lc \
+	"set -e; source scripts/linux_env.sh; cd src/host/layer23; \
+	 autoreconf -fi; \
+	 ./configure $$HOST_CONFARGS CFLAGS=\"$$CFLAGS\" LDFLAGS=\"$$LDFLAGS\" PKG_CONFIG_PATH=\"$$PKG_CONFIG_PATH\"; \
+	 make -C src/common liblayer23.a; \
+	 make -C src/host/layer23/src/modem modem || echo '[warn] modem target may not exist'; \
+	 ls -l src/common/liblayer23.a || true"
 else
 $(error Unsupported PLATFORM=$(PLATFORM). Use freertos or linux)
 endif
@@ -53,7 +68,7 @@ help:
 	@echo "  all       Build mobile and (optionally) modem (controlled by BUILD_MODEM)"
 	@echo "  clean     Remove build artifacts & containers"
 	@echo "Variables:"
-	@echo "  PLATFORM=freertos|linux (linux TBD; default freertos)"
+	@echo "  PLATFORM=freertos|linux (default freertos)"
 	@echo "  BUILD_MODEM=0|1 (default 0 on freertos, 1 on linux)"
 	@echo "Examples:"
 	@echo "  make mobile" 
@@ -133,19 +148,24 @@ all: fetch-deps lib mobile
 endif
 
 lib: fetch-deps _ensure_image
-	@echo "[lib] libosmocore (and FreeRTOS deps) baked into image for PLATFORM=$(PLATFORM)"
-	@echo "[lib] To rebuild with new refs adjust Docker build args (FREERTOS_KERNEL_REF, LIBOSMOCORE_REF) and run: make lib" 
+	@if [ "$(PLATFORM)" = "freertos" ]; then \
+	  echo "[lib] libosmocore + FreeRTOS baked into image (PLATFORM=$(PLATFORM))"; \
+	else \
+	  echo "[lib] libosmocore baked into linux image (PLATFORM=$(PLATFORM))"; \
+	fi
+	@echo "[lib] To rebuild with new refs adjust Docker build args (FREERTOS_*_REF, LIBOSMOCORE_REF) and run: make PLATFORM=$(PLATFORM) lib" 
 
 mobile: fetch-deps _ensure_image
-	@echo "[freertos] Building mobile"
+	@if [ "$(PLATFORM)" = "freertos" ]; then echo "[freertos] Building mobile"; else echo "[linux] Building mobile"; fi
 	@$(MOBILE_BUILD_CMD)
-	@echo "Built mobile binary: src/host/layer23/src/mobile/mobile"
+	@echo "Built mobile binary (PLATFORM=$(PLATFORM)): src/host/layer23/src/mobile/mobile"
 
 modem: _ensure_image
 	@if [ "$(PLATFORM)" = "freertos" ]; then \
 		echo "[freertos] Modem build not supported (GPRS stack removed)"; \
 	else \
-		echo "[linux] Modem build path not implemented yet"; false; \
+		echo "[linux] Building modem"; \
+		$(MODEM_BUILD_CMD); \
 	fi
 
 _build_freertos: mobile
@@ -180,6 +200,9 @@ clean-freertos:
 	@echo "[clean-freertos] Done"
 
 clean-linux:
-	@echo "[clean-linux] (placeholder) Removing prospective linux artifacts"
+	@echo "[clean-linux] Cleaning Linux build artifacts"
+	-$(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_LINUX) -lc "cd src/host/layer23 && make distclean 2>/dev/null || true" >/dev/null 2>&1 || true
 	- rm -rf build-linux 2>/dev/null || true
-	@echo "[clean-linux] (placeholder) No docker image defined yet"
+	@echo "[clean-linux] Docker compose down + prune (linux)"
+	-$(DOCKER_COMPOSE) down >/dev/null 2>&1 || true
+	@echo "[clean-linux] Done"

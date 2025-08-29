@@ -2,7 +2,7 @@ services:
   osmocom-bb-freertos: &base
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.freertos
       args:
         FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.0.1}
         FREERTOS_TCP_REF: ${FREERTOS_TCP_REF:-V4.1.0}
@@ -48,6 +48,33 @@ services:
     entrypoint: ["/bin/bash", "-lc"]
     command: ["source scripts/freertos_env.sh && echo 'Running tests...' && echo 'Tests would run here.'"]
 
+  osmocom-bb-linux: &linux_base
+    build:
+      context: .
+      dockerfile: Dockerfile.linux
+      args:
+        LIBOSMOCORE_REF: ${LIBOSMOCORE_LINUX_REF:-master}
+    image: osmocom-bb:linux
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace:delegated
+      - linux-build:/opt/linux-build
+    tty: true
+    stdin_open: true
+    environment:
+      TARGET_LINUX: 1
+    command: ["/bin/bash", "-lc", "echo 'Use: docker compose run linux-shell'"]
+
+  linux-shell:
+    <<: *linux_base
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["source scripts/linux_env.sh && exec bash"]
+
+  linux-build:
+    <<: *linux_base
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["source scripts/linux_env.sh && echo 'Linux build env ready' && exec bash"]
+
 volumes:
   freertos-build:
     driver: local
@@ -55,9 +82,11 @@ volumes:
     driver: local  
   dev-home:
     driver: local
+  linux-build:
+    driver: local
 
 networks:
   default:
     name: osmocom-bb-freertos
 
-name: osmocom-bb-freertos
+name: osmocom-bb-unified

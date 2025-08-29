@@ -1,4 +1,7 @@
-/* Expanded talloc compatibility layer for pseudotalloc usage */
+/* Expanded talloc compatibility layer for pseudotalloc usage.
+ * Only compiled when real talloc (libtalloc) is not available or when
+ * ENABLE_PSEUDOTALLOC is defined by configure (--enable-freertos path).
+ */
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -6,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#if defined(ENABLE_PSEUDOTALLOC) || defined(ENABLE_FREERTOS) || defined(TARGET_FREERTOS)
 int talloc_set_name(const void *ptr, const char *fmt, ...) { (void)ptr; (void)fmt; return 0; }
 int talloc_set_destructor(const void *ptr, int (*destructor)(void *)) { (void)ptr; (void)destructor; return 0; }
 char *talloc_strndup(const void *ctx, const char *p, size_t n) { (void)ctx; if (!p) return NULL; size_t l = strnlen(p,n); char *s = malloc(l+1); if (!s) return NULL; memcpy(s,p,l); s[l]='\0'; return s; }
@@ -42,3 +46,4 @@ const char *talloc_get_name(const void *ptr) { (void)ptr; return "pseudotalloc";
 size_t talloc_total_blocks(const void *ptr) { (void)ptr; return 0; }
 int talloc_reference_count(const void *ptr) { (void)ptr; return 1; }
 void talloc_report_depth_cb(const void *root, int depth, int max_depth, void (*cb)(const void*,int,int,int,void*), void *priv) { (void)root;(void)depth;(void)max_depth;(void)cb;(void)priv; }
+#endif /* pseudotalloc conditions */

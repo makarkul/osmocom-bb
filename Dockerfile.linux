@@ -1,0 +1,49 @@
+## Docker image for building osmocom-bb (Linux platform)
+## Provides a conventional upstream-style build environment using Debian.
+
+FROM debian:bookworm-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG LIBOSMOCORE_REPO="https://gitea.osmocom.org/osmocom/libosmocore.git"
+ARG LIBOSMOCORE_REF="master"
+
+ENV PATH=/usr/local/bin:$PATH \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    NPROC="$(nproc || echo 4)" \
+    LIBOSMOCORE_DIR=/opt/libosmocore
+
+## Base build tooling & runtime deps for osmocom-bb host utilities & modem
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git ca-certificates pkg-config automake autoconf libtool \
+    python3 python3-pip python3-setuptools file gzip bzip2 xz-utils ccache \
+    libtalloc-dev libpcsclite-dev libusb-1.0-0-dev libmnl-dev libreadline-dev \
+    liblua5.3-dev lua5.3 libfftw3-dev libzmq3-dev libsctp-dev \
+    libncurses5-dev libncursesw5-dev \
+    libgnutls28-dev \
+    # helpful diagnostics
+    gdb strace net-tools iproute2 tcpdump procps \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+## Build + install libosmocore (shared libs + pkg-config)
+RUN git clone "$LIBOSMOCORE_REPO" "$LIBOSMOCORE_DIR" && \
+    cd "$LIBOSMOCORE_DIR" && \
+    git checkout "$LIBOSMOCORE_REF" && \
+    echo "[docker-linux] Building libosmocore @ $LIBOSMOCORE_REF" && \
+    autoreconf -fi && \
+    ./configure --disable-werror --disable-uring --disable-doxygen \
+        --disable-manuals --disable-pcsc --disable-sctp --disable-gtp && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
+
+## Default working directory will be bind-mounted project root
+WORKDIR /workspace
+
+COPY scripts/linux_env.sh /workspace/scripts/linux_env.sh
+RUN chmod +x /workspace/scripts/linux_env.sh
+
+ENTRYPOINT ["/bin/bash", "-lc"]
+CMD ["echo", "Container ready. Use: docker compose run linux-shell"]

@@ -20,9 +20,18 @@
 
 #include <osmocom/bb/common/ms.h>
 
-/* Prototypes provided by talloc compatibility stubs when using pseudotalloc */
-int talloc_set_name(const void *ptr, const char *fmt, ...);
+/* Prototypes provided by talloc compatibility stubs when using pseudotalloc.
+ * When building against real libtalloc these are already provided (and
+ * talloc_set_destructor is a macro), so guard accordingly. */
+#ifndef TALLOC_COMPAT_DECLARED
+#ifndef talloc_set_name /* if real header not yet included */
+const char *talloc_set_name(const void *ptr, const char *fmt, ...);
+#endif
+#ifndef talloc_set_destructor /* avoid redefining macro from real talloc */
 int talloc_set_destructor(const void *ptr, int (*destructor)(void *));
+#endif
+#define TALLOC_COMPAT_DECLARED 1
+#endif
 
 extern struct llist_head ms_list;
 
