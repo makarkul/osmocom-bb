@@ -7,11 +7,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 ## Versions (override with --build-arg)
 ARG FREERTOS_KERNEL_REPO="https://github.com/FreeRTOS/FreeRTOS-Kernel.git"
-ARG FREERTOS_KERNEL_REF="V11.1.0"
+ARG FREERTOS_KERNEL_REF="V11.0.1"
 ARG FREERTOS_TCP_REPO="https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git"
 ARG FREERTOS_TCP_REF="V4.1.0"
 ARG LIBOSMOCORE_REPO="https://github.com/makarkul/libosmocore.git"
-ARG LIBOSMOCORE_REF="freertos-adaptations"
+ARG LIBOSMOCORE_REF="master"
 
 ENV FREERTOS_DEPS_DIR=/workspace/deps/freertos \
     LIBOSMOCORE_DIR=/workspace/deps/libosmocore \

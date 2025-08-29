@@ -4,9 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.1.0}
+        FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.0.1}
         FREERTOS_TCP_REF: ${FREERTOS_TCP_REF:-V4.1.0}
-        LIBOSMOCORE_REF: ${LIBOSMOCORE_REF:-freertos-adaptations}
+        LIBOSMOCORE_REF: ${LIBOSMOCORE_REF:-master}
     image: osmocom-bb:freertos
     working_dir: /workspace
     volumes:
@@ -16,9 +16,9 @@ services:
     tty: true
     stdin_open: true
     environment:
-      FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.1.0}
+      FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.0.1}
       FREERTOS_TCP_REF: ${FREERTOS_TCP_REF:-V4.1.0}
-      LIBOSMOCORE_REF: ${LIBOSMOCORE_REF:-freertos-adaptations}
+      LIBOSMOCORE_REF: ${LIBOSMOCORE_REF:-master}
       TARGET_FREERTOS: 1
       TARGET_POSIX: 1
     command: ["/bin/bash", "-lc", "echo 'Use: docker compose run shell' or 'docker compose run build'"]

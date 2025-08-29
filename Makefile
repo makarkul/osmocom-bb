@@ -46,6 +46,7 @@ help:
 	@echo "-----------------------------------"
 	@echo "Targets:"
 	@echo "  help      Show this help (default)"
+	@echo "  fetch     Clone/update external deps (deps/ & refs/) - auto-called by build targets"
 	@echo "  lib       Build libosmocore (via docker image)"
 	@echo "  mobile    Build only the mobile application"
 	@echo "  modem     Attempt to build modem (stubbed / skipped on freertos)"
@@ -54,19 +55,21 @@ help:
 	@echo "Variables:"
 	@echo "  PLATFORM=freertos|linux (linux TBD; default freertos)"
 	@echo "  BUILD_MODEM=0|1 (default 0 on freertos, 1 on linux)"
-	@echo "  fetch     Clone/update external deps (deps/ & refs/)"
 	@echo "Examples:"
 	@echo "  make mobile" 
 	@echo "  make BUILD_MODEM=1 all"
 	@echo "  make clean"
-	@echo "Notes: Modem build requires GPRS libraries which are removed in freertos profile."
-	@echo "       Use FORCE_FETCH=1 to force updates during fetch."
-	@echo "       Override *_REF vars (e.g., LIBOSMOCORE_REF=branchname)."
+	@echo "Notes:"
+	@echo "  - Dependencies are fetched automatically (checks for empty folders)"
+	@echo "  - Modem build requires GPRS libraries which are removed in freertos profile"
+	@echo "  - Use FORCE_FETCH=1 to force updates during fetch"
+	@echo "  - Override *_REF vars (e.g., LIBOSMOCORE_REF=branchname)"
+	@echo "  - deps/ and refs/ folders are git-ignored for clean development"
 
 # External reference versions
-FREERTOS_KERNEL_REF ?= V11.1.0
+FREERTOS_KERNEL_REF ?= V11.0.1
 FREERTOS_TCP_REF ?= V4.1.0
-LIBOSMOCORE_REF ?= freertos-adaptations
+LIBOSMOCORE_REF ?= master
 OSMOCOM_BB_REF ?= master
 FORCE_FETCH ?= 0
 
@@ -85,51 +88,55 @@ fetch-platform-check:
 fetch-deps: fetch-platform-check
 	@echo "[fetch-deps] Ensuring dependencies in deps/ (PLATFORM=$(PLATFORM))"
 	@mkdir -p deps
-	@if [ ! -d deps/freertos-kernel ]; then \
+	@if [ ! -d deps/freertos-kernel ] || [ -z "$$(ls -A deps/freertos-kernel 2>/dev/null)" ]; then \
 		echo "  - cloning FreeRTOS-Kernel ($(FREERTOS_KERNEL_REF))"; \
+		rm -rf deps/freertos-kernel; \
 		git clone --depth 1 --branch $(FREERTOS_KERNEL_REF) https://github.com/FreeRTOS/FreeRTOS-Kernel.git deps/freertos-kernel; \
 	elif [ "$(FORCE_FETCH)" = "1" ]; then \
 		echo "  - updating FreeRTOS-Kernel"; \
 		(cd deps/freertos-kernel && git fetch --depth 1 origin $(FREERTOS_KERNEL_REF) && git checkout -f $(FREERTOS_KERNEL_REF)); \
-	else echo "  - freertos-kernel exists (skip)"; fi
-	@if [ ! -d deps/freertos-plus-tcp ]; then \
+	else echo "  - freertos-kernel exists and is populated (skip)"; fi
+	@if [ ! -d deps/freertos-plus-tcp ] || [ -z "$$(ls -A deps/freertos-plus-tcp 2>/dev/null)" ]; then \
 		echo "  - cloning FreeRTOS-Plus-TCP ($(FREERTOS_TCP_REF))"; \
+		rm -rf deps/freertos-plus-tcp; \
 		git clone --depth 1 --branch $(FREERTOS_TCP_REF) https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git deps/freertos-plus-tcp; \
 	elif [ "$(FORCE_FETCH)" = "1" ]; then \
 		echo "  - updating FreeRTOS-Plus-TCP"; \
 		(cd deps/freertos-plus-tcp && git fetch --depth 1 origin $(FREERTOS_TCP_REF) && git checkout -f $(FREERTOS_TCP_REF)); \
-	else echo "  - freertos-plus-tcp exists (skip)"; fi
-	@if [ ! -d deps/libosmocore ]; then \
+	else echo "  - freertos-plus-tcp exists and is populated (skip)"; fi
+	@if [ ! -d deps/libosmocore ] || [ -z "$$(ls -A deps/libosmocore 2>/dev/null)" ]; then \
 		echo "  - cloning libosmocore ($(LIBOSMOCORE_REF))"; \
+		rm -rf deps/libosmocore; \
 		git clone https://github.com/makarkul/libosmocore.git deps/libosmocore && (cd deps/libosmocore && git checkout $(LIBOSMOCORE_REF)); \
 	elif [ "$(FORCE_FETCH)" = "1" ]; then \
 		echo "  - updating libosmocore"; \
 		(cd deps/libosmocore && git fetch origin $(LIBOSMOCORE_REF) && git checkout -f $(LIBOSMOCORE_REF)); \
-	else echo "  - libosmocore exists (skip)"; fi
+	else echo "  - libosmocore exists and is populated (skip)"; fi
 
 fetch-refs: fetch-platform-check
 	@echo "[fetch-refs] Ensuring reference sources in refs/ (PLATFORM=$(PLATFORM))"
 	@mkdir -p refs
-	@if [ ! -d refs/osmocom-bb ]; then \
+	@if [ ! -d refs/osmocom-bb ] || [ -z "$$(ls -A refs/osmocom-bb 2>/dev/null)" ]; then \
 		echo "  - cloning osmocom-bb ($(OSMOCOM_BB_REF))"; \
+		rm -rf refs/osmocom-bb; \
 		git clone https://gitea.osmocom.org/phone-side/osmocom-bb.git refs/osmocom-bb && (cd refs/osmocom-bb && git checkout $(OSMOCOM_BB_REF)); \
 	elif [ "$(FORCE_FETCH)" = "1" ]; then \
 		echo "  - updating osmocom-bb"; \
 		(cd refs/osmocom-bb && git fetch origin $(OSMOCOM_BB_REF) && git checkout -f $(OSMOCOM_BB_REF)); \
-	else echo "  - osmocom-bb exists (skip)"; fi
+	else echo "  - osmocom-bb exists and is populated (skip)"; fi
 
 ifeq ($(BUILD_MODEM),1)
-all: lib mobile modem
+all: fetch-deps lib mobile modem
 else
-all: lib mobile
+all: fetch-deps lib mobile
 	@echo "[info] Modem skipped (BUILD_MODEM=$(BUILD_MODEM), PLATFORM=$(PLATFORM))"
 endif
 
-lib: _ensure_image
+lib: fetch-deps _ensure_image
 	@echo "[lib] libosmocore (and FreeRTOS deps) baked into image for PLATFORM=$(PLATFORM)"
 	@echo "[lib] To rebuild with new refs adjust Docker build args (FREERTOS_KERNEL_REF, LIBOSMOCORE_REF) and run: make lib" 
 
-mobile: _ensure_image
+mobile: fetch-deps _ensure_image
 	@echo "[freertos] Building mobile"
 	@$(MOBILE_BUILD_CMD)
 	@echo "Built mobile binary: src/host/layer23/src/mobile/mobile"

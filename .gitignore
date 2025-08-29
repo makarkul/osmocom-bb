@@ -16,6 +16,11 @@ autom4te.cache/
 libtool
 stamp-h1
 
+# Layer23 build artifacts
+src/host/layer23/compile
+src/host/layer23/config.h.in~
+src/host/layer23/configure~
+
 # CMake
 build/
 CMakeCache.txt
