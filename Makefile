@@ -2,7 +2,7 @@
 ## Supported targets: help (default), all, clean
 ## Usage: make [PLATFORM=freertos|linux] <target>
 
-.PHONY: help all clean clean-freertos clean-linux mobile modem lib fetch fetch-deps fetch-refs _build_freertos _ensure_image _build_linux linux-mobile linux-modem
+.PHONY: help all clean clean-freertos clean-linux mobile modem lib fetch fetch-deps fetch-refs _build_freertos _ensure_image _build_linux linux-mobile linux-modem host-faketrx
 
 PLATFORM ?= freertos
 # Build modem by default only on linux platform (GPRS stack removed on freertos)
@@ -66,6 +66,7 @@ help:
 	@echo "  mobile    Build only the mobile application"
 	@echo "  modem     Attempt to build modem (stubbed / skipped on freertos)"
 	@echo "  all       Build mobile and (optionally) modem (controlled by BUILD_MODEM)"
+	@echo "  host-faketrx  Build FakeTRX host tool subset (mobile + trxcon; no firmware/virtphy)"
 	@echo "  clean     Remove build artifacts & containers"
 	@echo "Variables:"
 	@echo "  PLATFORM=freertos|linux (default freertos)"
@@ -161,6 +162,22 @@ mobile: fetch-deps _ensure_image
 	@echo "Built mobile binary (PLATFORM=$(PLATFORM)): src/host/layer23/src/mobile/mobile"
 
 modem: _ensure_image
+	@if [ "$(PLATFORM)" = "freertos" ]; then \
+		echo "[freertos] Modem build not supported (GPRS stack removed)"; \
+	else \
+		echo "[linux] Building modem"; \
+		$(MODEM_BUILD_CMD); \
+	fi
+
+host-faketrx: fetch-deps _ensure_image
+	@echo "[host-faketrx] Building FakeTRX set: mobile, trxcon (no firmware/osmocon/virtphy)"
+	@if [ "$(PLATFORM)" = "freertos" ]; then src_env=scripts/freertos_env.sh; else src_env=scripts/linux_env.sh; fi; \
+	  $(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_$(shell echo $(PLATFORM) | tr a-z A-Z)) -lc "set -e; source $$src_env; \
+	  cd src/host/layer23; autoreconf -fi; ./configure $$HOST_CONFARGS CFLAGS=\"$$CFLAGS\" LDFLAGS=\"$$LDFLAGS\" PKG_CONFIG_PATH=\"$$PKG_CONFIG_PATH\"; \
+	  make -C src/common liblayer23.a; make -C src/mobile mobile; \
+	  cd ../../trxcon; autoreconf -fi; ./configure $$HOST_CONFARGS; make; \
+	  echo '[host-faketrx] Built:'; ls -1 src/host/layer23/src/mobile/mobile src/host/trxcon/src/trxcon 2>/dev/null || true"
+	@echo "[host-faketrx] Done"
 	@if [ "$(PLATFORM)" = "freertos" ]; then \
 		echo "[freertos] Modem build not supported (GPRS stack removed)"; \
 	else \

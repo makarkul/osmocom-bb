@@ -114,6 +114,21 @@ This script:
 - **trxcon**: TRX connection bridge
 - **virtphy**: Virtual PHY for simulation
 
+### FakeTRX Minimal Host Subset
+
+For containerized FakeTRX demos where only userspace tools are needed and no virtual Um path is required, build just `mobile` and `trxcon`:
+
+```
+make PLATFORM=linux host-faketrx
+```
+
+This omits:
+- Firmware / osmocon
+- virtphy (GSMTAP virtual Um)
+- Scanners (bcch_scan, cell_log, etc.)
+
+Use when pairing with `fake_trx.py` plus `osmo-bts-trx` in a core network stack.
+
 ## FreeRTOS Adaptations
 
 The FreeRTOS port includes:
