@@ -1,5 +1,5 @@
 ## Docker image for building osmocom-bb-freertos
-## This builds on libosmocore-freertos from https://github.com/makarkul/libosmocore.git
+## This builds on a FreeRTOS-adapted libosmocore from https://github.com/makarkul/libosmocore.git
 
 FROM debian:bookworm-slim AS base
 

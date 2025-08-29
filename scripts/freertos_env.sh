@@ -10,10 +10,9 @@ set -euo pipefail
 ROOT_DIR=${ROOT_DIR:-/workspace}
 FREERTOS_DEPS_DIR=${FREERTOS_DEPS_DIR:-$ROOT_DIR/deps/freertos}
 LIBOSMOCORE_DIR=${LIBOSMOCORE_DIR:-$ROOT_DIR/deps/libosmocore}
-LOCAL_LIBOSMOCORE_ALT=$ROOT_DIR/src/shared/libosmocore-freertos
+LOCAL_LIBOSMOCORE_ALT=$ROOT_DIR/src/shared/libosmocore
 
-# Setup PKG_CONFIG_PATH for libosmocore-freertos
-# Prefer in-tree freertos-adapted libosmocore (built separately) if present
+# Setup PKG_CONFIG_PATH for in-tree libosmocore (FreeRTOS adapted) if present
 if [ -d "$LOCAL_LIBOSMOCORE_ALT" ]; then
 	export PKG_CONFIG_PATH="$LOCAL_LIBOSMOCORE_ALT/build-freertos/src:$LOCAL_LIBOSMOCORE_ALT/build-freertos:$PKG_CONFIG_PATH"
 fi
@@ -29,7 +28,7 @@ export FREERTOS_CFLAGS="-I$FREERTOS_DEPS_DIR/config -I$FREERTOS_DEPS_DIR/include
 # FreeRTOS target flags (host apps running on FreeRTOS)
 export FREERTOS_TARGET_CFLAGS="-DTARGET_FREERTOS=1 -DFREERTOS_HOST=1"
 
-# libosmocore-freertos include paths 
+# libosmocore include paths 
 if [ -d "$LOCAL_LIBOSMOCORE_ALT/build-freertos/include" ]; then
 	export LIBOSMOCORE_CFLAGS="-I$LOCAL_LIBOSMOCORE_ALT/build-freertos/include ${LIBOSMOCORE_CFLAGS:-}"
 	export LIBOSMOCORE_LIBS="-L$LOCAL_LIBOSMOCORE_ALT/build-freertos/src/.libs ${LIBOSMOCORE_LIBS:-}"
@@ -43,7 +42,7 @@ export CFLAGS="$FREERTOS_CFLAGS $FREERTOS_TARGET_CFLAGS $LIBOSMOCORE_CFLAGS ${CF
 export LDFLAGS="$LIBOSMOCORE_LIBS ${LDFLAGS:-}"
 
 # Configure arguments for host applications targeting FreeRTOS
-export HOST_CONFARGS="--enable-freertos --with-libosmocore-freertos"
+export HOST_CONFARGS="--enable-freertos"
 
 # Target flags
 export TARGET_FREERTOS=1
