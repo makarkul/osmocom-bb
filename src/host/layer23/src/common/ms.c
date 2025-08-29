@@ -20,20 +20,25 @@
 
 #include <osmocom/bb/common/ms.h>
 
+/* Prototypes provided by talloc compatibility stubs when using pseudotalloc */
+int talloc_set_name(const void *ptr, const char *fmt, ...);
+int talloc_set_destructor(const void *ptr, int (*destructor)(void *));
+
 extern struct llist_head ms_list;
 
 /* Default value be configured by cmdline arg: */
 uint16_t cfg_test_arfcn = 871;
 
-static int osmocom_ms_talloc_destructor(struct osmocom_ms *ms)
+static int osmocom_ms_talloc_destructor(void *arg)
 {
-
+	struct osmocom_ms *ms = (struct osmocom_ms *)arg;
 	if (ms->sap_wq.bfd.fd > -1) {
 		sap_close(ms);
 		ms->sap_wq.bfd.fd = -1;
 	}
-
+#ifdef ENABLE_GPRS
 	gprs_settings_fi(ms);
+#endif
 	gsm_subscr_exit(ms);
 	gsm_sim_exit(ms);
 	return 0;
@@ -68,7 +73,9 @@ struct osmocom_ms *osmocom_ms_alloc(void *ctx, const char *name)
 
 	gsm_support_init(ms);
 	gsm_settings_init(ms);
+#ifdef ENABLE_GPRS
 	gprs_settings_init(ms);
+#endif
 	/* init SAP client before SIM card starts up */
 	sap_init(ms);
 	/* SAP response call-back */

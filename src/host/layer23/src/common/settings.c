@@ -25,7 +25,8 @@
 #include <osmocom/bb/common/utils.h>
 #include <osmocom/bb/common/logging.h>
 #include <osmocom/bb/common/osmocom_data.h>
-#include <osmocom/bb/common/apn.h>
+/* GPRS disabled: exclude APN handling */
+/* #include <osmocom/bb/common/apn.h> */
 #include <osmocom/bb/common/ms.h>
 #include <osmocom/bb/common/l1l2_interface.h>
 
@@ -268,44 +269,43 @@ const struct value_string tch_data_io_format_names[] = {
 	{ 0, NULL }
 };
 
+#ifdef ENABLE_GPRS
 int gprs_settings_init(struct osmocom_ms *ms)
 {
 	struct gprs_settings *set = &ms->gprs;
 	INIT_LLIST_HEAD(&set->apn_list);
-
 	return 0;
 }
-
 int gprs_settings_fi(struct osmocom_ms *ms)
 {
 	struct gprs_settings *set = &ms->gprs;
 	struct osmobb_apn *apn;
-	while ((apn = llist_first_entry_or_null(&set->apn_list, struct osmobb_apn, list))) {
-		/* free calls llist_del(): */
-		apn_free(apn);
-	}
+	while ((apn = llist_first_entry_or_null(&set->apn_list, struct osmobb_apn, list)))
+		apn_free(apn); /* free calls llist_del() */
 	return 0;
 }
-
 struct osmobb_apn *ms_find_apn_by_name(struct osmocom_ms *ms, const char *apn_name)
 {
 	struct gprs_settings *set = &ms->gprs;
 	struct osmobb_apn *apn;
-
 	llist_for_each_entry(apn, &set->apn_list, list) {
 		if (strcmp(apn->cfg.name, apn_name) == 0)
 			return apn;
 	}
 	return NULL;
 }
-
 int ms_dispatch_all_apn(struct osmocom_ms *ms, uint32_t event, void *data)
 {
 	struct gprs_settings *set = &ms->gprs;
 	int rc = 0;
 	struct osmobb_apn *apn;
-
 	llist_for_each_entry(apn, &set->apn_list, list)
 		rc |= osmo_fsm_inst_dispatch(apn->fsm.fi, event, data);
 	return rc;
 }
+#else
+int gprs_settings_init(struct osmocom_ms *ms) { return 0; }
+int gprs_settings_fi(struct osmocom_ms *ms) { return 0; }
+struct osmobb_apn *ms_find_apn_by_name(struct osmocom_ms *ms, const char *apn_name) { return NULL; }
+int ms_dispatch_all_apn(struct osmocom_ms *ms, uint32_t event, void *data) { return 0; }
+#endif

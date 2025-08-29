@@ -32,8 +32,18 @@
 #include <osmocom/core/msgb.h>
 #include <osmocom/gsm/tlv.h>
 #include <osmocom/gsm/gsm_utils.h>
+#ifndef DISABLE_GSMTAP
 #include <osmocom/core/gsmtap_util.h>
 #include <osmocom/core/gsmtap.h>
+#endif
+
+#ifdef DISABLE_GSMTAP
+/* Minimal prototypes for stubbed functions */
+int chantype_rsl2gsmtap2(uint8_t rsl_chantype, uint8_t link_id, bool sacch);
+int gsmtap_send(void *src, uint16_t arfcn, int8_t signal_dbm, int8_t snr,
+		uint8_t chan_type, uint8_t ss, uint8_t timeslot, uint16_t frame_number,
+		const uint8_t *data, uint16_t len);
+#endif
 #include <osmocom/gsm/protocol/gsm_04_08.h>
 #include <osmocom/gsm/protocol/gsm_08_58.h>
 #include <osmocom/gsm/rsl.h>
@@ -56,6 +66,7 @@ static unsigned int fn2ccch_block(uint32_t fn)
 	return rc;
 }
 
+#ifndef DISABLE_GSMTAP
 static uint8_t chantype_rsl2gsmtap_ext(uint8_t rsl_chantype, uint8_t link_id, uint32_t fn, uint8_t num_agch)
 {
 	uint8_t ret = chantype_rsl2gsmtap2(rsl_chantype, link_id, false);
@@ -66,6 +77,10 @@ static uint8_t chantype_rsl2gsmtap_ext(uint8_t rsl_chantype, uint8_t link_id, ui
 		return GSMTAP_CHANNEL_PCH;
 	return GSMTAP_CHANNEL_AGCH;
 }
+#else
+static inline uint8_t chantype_rsl2gsmtap_ext(uint8_t rsl_chantype, uint8_t link_id, uint32_t fn, uint8_t num_agch)
+{ (void)rsl_chantype; (void)link_id; (void)fn; (void)num_agch; return 0; }
+#endif
 
 static const uint8_t fill_frame[GSM_MACBLOCK_LEN] = {
         0x03, 0x03, 0x01, 0x2B, 0x2B, 0x2B, 0x2B, 0x2B, 0x2B, 0x2B,

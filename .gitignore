@@ -6,7 +6,6 @@
 *.la
 .libs/
 .deps/
-Makefile
 Makefile.in
 config.h
 config.log
@@ -36,3 +35,5 @@ cmake_install.cmake
 .DS_Store
 Thumbs.db
 src/shared/libosmocore/
+refs/
+deps/

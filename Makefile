@@ -1,0 +1,178 @@
+## Top-level Makefile replacing build.sh (docker-driven)
+## Supported targets: help (default), all, clean
+## Usage: make [PLATFORM=freertos|linux] <target>
+## Note: PLATFORM=linux is a placeholder (not yet implemented)
+
+.PHONY: help all clean clean-freertos clean-linux mobile modem lib fetch fetch-deps fetch-refs _build_freertos _ensure_image
+
+PLATFORM ?= freertos
+# Build modem by default only on linux platform (GPRS stack removed on freertos)
+ifeq ($(PLATFORM),freertos)
+BUILD_MODEM ?= 0
+else
+BUILD_MODEM ?= 1
+endif
+DOCKER_COMPOSE ?= docker-compose
+SERVICE_FREERTOS = osmocom-bb-freertos
+
+## Container commands (only freertos implemented for now)
+ifeq ($(PLATFORM),freertos)
+BUILD_IMAGE_CMD = $(DOCKER_COMPOSE) build $(SERVICE_FREERTOS)
+MOBILE_BUILD_CMD = $(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_FREERTOS) -lc \
+	"set -e; source scripts/freertos_env.sh; cd src/host/layer23; \
+	 autoreconf -fi; \
+	 ./configure $$HOST_CONFARGS CFLAGS=\"$$CFLAGS\" LDFLAGS=\"$$LDFLAGS\" PKG_CONFIG_PATH=\"$$PKG_CONFIG_PATH\"; \
+	 make -C src/common liblayer23.a; \
+	 make -C src/mobile mobile; \
+	 ls -l src/common/liblayer23.a src/mobile/mobile"
+
+MODEM_BUILD_CMD = $(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_FREERTOS) -lc \
+	"set -e; source scripts/freertos_env.sh; cd src/host/layer23; \
+	 autoreconf -fi; \
+	 ./configure $$HOST_CONFARGS CFLAGS=\"$$CFLAGS\" LDFLAGS=\"$$LDFLAGS\" PKG_CONFIG_PATH=\"$$PKG_CONFIG_PATH\"; \
+	 make -C src/common liblayer23.a; \
+	 echo '[info] Modem build skipped: GPRS stack removed for freertos platform'"
+else ifeq ($(PLATFORM),linux)
+$(error PLATFORM=linux build not implemented yet. Use PLATFORM=freertos.)
+else
+$(error Unsupported PLATFORM=$(PLATFORM). Use freertos or linux)
+endif
+
+.DEFAULT_GOAL := help
+
+
+help:
+	@echo "OsmocomBB unified Makefile (Docker)"
+	@echo "-----------------------------------"
+	@echo "Targets:"
+	@echo "  help      Show this help (default)"
+	@echo "  lib       Build libosmocore (via docker image)"
+	@echo "  mobile    Build only the mobile application"
+	@echo "  modem     Attempt to build modem (stubbed / skipped on freertos)"
+	@echo "  all       Build mobile and (optionally) modem (controlled by BUILD_MODEM)"
+	@echo "  clean     Remove build artifacts & containers"
+	@echo "Variables:"
+	@echo "  PLATFORM=freertos|linux (linux TBD; default freertos)"
+	@echo "  BUILD_MODEM=0|1 (default 0 on freertos, 1 on linux)"
+	@echo "  fetch     Clone/update external deps (deps/ & refs/)"
+	@echo "Examples:"
+	@echo "  make mobile" 
+	@echo "  make BUILD_MODEM=1 all"
+	@echo "  make clean"
+	@echo "Notes: Modem build requires GPRS libraries which are removed in freertos profile."
+	@echo "       Use FORCE_FETCH=1 to force updates during fetch."
+	@echo "       Override *_REF vars (e.g., LIBOSMOCORE_REF=branchname)."
+
+# External reference versions
+FREERTOS_KERNEL_REF ?= V11.1.0
+FREERTOS_TCP_REF ?= V4.1.0
+LIBOSMOCORE_REF ?= freertos-adaptations
+OSMOCOM_BB_REF ?= master
+FORCE_FETCH ?= 0
+
+fetch: fetch-platform-check fetch-deps fetch-refs
+	@echo "[fetch] Completed for PLATFORM=$(PLATFORM)"
+
+.PHONY: fetch-platform-check
+fetch-platform-check:
+	@if [ "$(origin PLATFORM)" != "command line" ]; then \
+		echo "[fetch] PLATFORM not specified, defaulting to '$(PLATFORM)'. Use e.g. 'make PLATFORM=freertos fetch'"; \
+	fi
+	@if [ "$(PLATFORM)" != "freertos" ] && [ "$(PLATFORM)" != "linux" ]; then \
+		echo "[fetch] Unsupported PLATFORM='$(PLATFORM)'. Use freertos or linux."; exit 2; \
+	fi
+
+fetch-deps: fetch-platform-check
+	@echo "[fetch-deps] Ensuring dependencies in deps/ (PLATFORM=$(PLATFORM))"
+	@mkdir -p deps
+	@if [ ! -d deps/freertos-kernel ]; then \
+		echo "  - cloning FreeRTOS-Kernel ($(FREERTOS_KERNEL_REF))"; \
+		git clone --depth 1 --branch $(FREERTOS_KERNEL_REF) https://github.com/FreeRTOS/FreeRTOS-Kernel.git deps/freertos-kernel; \
+	elif [ "$(FORCE_FETCH)" = "1" ]; then \
+		echo "  - updating FreeRTOS-Kernel"; \
+		(cd deps/freertos-kernel && git fetch --depth 1 origin $(FREERTOS_KERNEL_REF) && git checkout -f $(FREERTOS_KERNEL_REF)); \
+	else echo "  - freertos-kernel exists (skip)"; fi
+	@if [ ! -d deps/freertos-plus-tcp ]; then \
+		echo "  - cloning FreeRTOS-Plus-TCP ($(FREERTOS_TCP_REF))"; \
+		git clone --depth 1 --branch $(FREERTOS_TCP_REF) https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git deps/freertos-plus-tcp; \
+	elif [ "$(FORCE_FETCH)" = "1" ]; then \
+		echo "  - updating FreeRTOS-Plus-TCP"; \
+		(cd deps/freertos-plus-tcp && git fetch --depth 1 origin $(FREERTOS_TCP_REF) && git checkout -f $(FREERTOS_TCP_REF)); \
+	else echo "  - freertos-plus-tcp exists (skip)"; fi
+	@if [ ! -d deps/libosmocore ]; then \
+		echo "  - cloning libosmocore ($(LIBOSMOCORE_REF))"; \
+		git clone https://github.com/makarkul/libosmocore.git deps/libosmocore && (cd deps/libosmocore && git checkout $(LIBOSMOCORE_REF)); \
+	elif [ "$(FORCE_FETCH)" = "1" ]; then \
+		echo "  - updating libosmocore"; \
+		(cd deps/libosmocore && git fetch origin $(LIBOSMOCORE_REF) && git checkout -f $(LIBOSMOCORE_REF)); \
+	else echo "  - libosmocore exists (skip)"; fi
+
+fetch-refs: fetch-platform-check
+	@echo "[fetch-refs] Ensuring reference sources in refs/ (PLATFORM=$(PLATFORM))"
+	@mkdir -p refs
+	@if [ ! -d refs/osmocom-bb ]; then \
+		echo "  - cloning osmocom-bb ($(OSMOCOM_BB_REF))"; \
+		git clone https://gitea.osmocom.org/phone-side/osmocom-bb.git refs/osmocom-bb && (cd refs/osmocom-bb && git checkout $(OSMOCOM_BB_REF)); \
+	elif [ "$(FORCE_FETCH)" = "1" ]; then \
+		echo "  - updating osmocom-bb"; \
+		(cd refs/osmocom-bb && git fetch origin $(OSMOCOM_BB_REF) && git checkout -f $(OSMOCOM_BB_REF)); \
+	else echo "  - osmocom-bb exists (skip)"; fi
+
+ifeq ($(BUILD_MODEM),1)
+all: lib mobile modem
+else
+all: lib mobile
+	@echo "[info] Modem skipped (BUILD_MODEM=$(BUILD_MODEM), PLATFORM=$(PLATFORM))"
+endif
+
+lib: _ensure_image
+	@echo "[lib] libosmocore (and FreeRTOS deps) baked into image for PLATFORM=$(PLATFORM)"
+	@echo "[lib] To rebuild with new refs adjust Docker build args (FREERTOS_KERNEL_REF, LIBOSMOCORE_REF) and run: make lib" 
+
+mobile: _ensure_image
+	@echo "[freertos] Building mobile"
+	@$(MOBILE_BUILD_CMD)
+	@echo "Built mobile binary: src/host/layer23/src/mobile/mobile"
+
+modem: _ensure_image
+	@if [ "$(PLATFORM)" = "freertos" ]; then \
+		echo "[freertos] Modem build not supported (GPRS stack removed)"; \
+	else \
+		echo "[linux] Modem build path not implemented yet"; false; \
+	fi
+
+_build_freertos: mobile
+
+_ensure_image:
+	@echo "Ensuring Docker image for PLATFORM=$(PLATFORM) is built"
+	@$(BUILD_IMAGE_CMD)
+
+clean:
+	@if [ "$(origin PLATFORM)" = "command line" ]; then \
+		echo "[clean] PLATFORM specified: $(PLATFORM)"; \
+		if [ "$(PLATFORM)" = "freertos" ]; then $(MAKE) clean-freertos; \
+		elif [ "$(PLATFORM)" = "linux" ]; then $(MAKE) clean-linux; \
+		else echo "Unknown PLATFORM=$(PLATFORM)"; exit 2; fi; \
+	else \
+		echo "[clean] No PLATFORM specified: cleaning all platforms"; \
+		$(MAKE) clean-freertos; \
+		$(MAKE) clean-linux; \
+	fi
+	@echo "Clean aggregate complete"
+
+clean-freertos:
+	@echo "[clean-freertos] Cleaning FreeRTOS build artifacts"
+	-$(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_FREERTOS) -lc "cd src/host/layer23 && make distclean 2>/dev/null || true" >/dev/null 2>&1 || true
+	@echo "[clean-freertos] Removing libosmocore freertos build dir"
+	-$(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash $(SERVICE_FREERTOS) -lc "cd deps/libosmocore && rm -rf build-freertos 2>/dev/null || true" >/dev/null 2>&1 || true
+	- rm -rf deps/libosmocore/build-freertos 2>/dev/null || true
+	@echo "[clean-freertos] Docker compose down + prune"
+	-$(DOCKER_COMPOSE) down >/dev/null 2>&1 || true
+	-docker system prune -f >/dev/null 2>&1 || true
+	-docker volume prune -f >/dev/null 2>&1 || true
+	@echo "[clean-freertos] Done"
+
+clean-linux:
+	@echo "[clean-linux] (placeholder) Removing prospective linux artifacts"
+	- rm -rf build-linux 2>/dev/null || true
+	@echo "[clean-linux] (placeholder) No docker image defined yet"

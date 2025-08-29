@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build script for OsmocomBB FreeRTOS/POSIX
+# Build script for OsmocomBB FreeRTOS/POSIX using Docker
 
 set -e
 
@@ -36,149 +36,192 @@ show_usage() {
     echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
-    echo "  build          Build OsmocomBB for FreeRTOS (includes host tools for testing)"
-    echo "  libosmocore    Build and test only libosmocore library"
+    echo "  build          Build mobile application (includes libosmocore dependency)"
+    echo "  mobile         Build mobile application using autotools"
+    echo "  layer23        Build Layer23 mobile application only"
+    echo "  nofirmware     Build all host applications (mobile, osmocon, etc.)"
+    echo "  libosmocore    Build libosmocore dependency only"
     echo "  dev            Start development environment with live source mounting"
     echo "  clean          Clean build artifacts"
     echo "  test           Test the built applications"
     echo "  shell          Enter interactive shell in build container"
     echo ""
     echo "Examples:"
-    echo "  build.sh build         # Build FreeRTOS libraries and host tools"
-    echo "  build.sh libosmocore   # Test libosmocore compilation only"
+    echo "  build.sh build         # Build mobile application with all dependencies"
+    echo "  build.sh mobile        # Build mobile application using autotools"
+    echo "  build.sh nofirmware    # Build all host applications"
+    echo "  build.sh libosmocore   # Build libosmocore dependency only"
     echo "  build.sh dev           # Start dev container for live development"
     echo "  build.sh shell         # Interactive shell in build environment"
 }
 
-build_libosmocore_only() {
-    print_header "Testing libosmocore compilation only"
+build_libosmocore() {
+    print_header "Building libosmocore dependency"
     
-    # Create a temporary Dockerfile that only builds libosmocore
-    cat > Dockerfile.libosmocore-test << 'EOF'
-FROM ubuntu:22.04 AS libosmocore-test
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    git \
-    pkg-config \
-    autotools-dev \
-    autoconf \
-    automake \
-    libtool \
-    python3 \
-    python3-pip \
-    libpcsclite-dev \
-    libtalloc-dev \
-    libsctp-dev \
-    libmnl-dev \
-    libdbi-dev \
-    libdbd-sqlite3 \
-    libsqlite3-dev \
-    libpcap-dev \
-    libortp-dev \
-    liblua5.3-dev \
-    lua5.3 \
-    libusb-1.0-0-dev \
-    libgnutls28-dev \
-    liburing-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /workspace
-RUN git clone https://github.com/makarkul/libosmocore-freertos.git libosmocore && \
-    cd libosmocore && \
-    git checkout freertos-adaptations
-
-# No additional dependencies needed - GitHub repo already has FreeRTOS adaptations
-
-# Build libosmocore with FreeRTOS adaptations
-RUN cd libosmocore && \
-    autoreconf -fi && \
-    echo "=== libosmocore Configuration Summary ===" && \
-    echo "ENABLED features:" && \
-    echo "  ✓ embedded build (--enable-embedded)" && \
-    echo "  ✓ pseudotalloc memory management (--enable-pseudotalloc)" && \
-    echo "  ✓ VTY telnet interface (enabled by default)" && \
-    echo "  ✓ CTRL library (enabled by default)" && \
-    echo "  ✓ Gb library (enabled by default)" && \
-    echo "  ✓ plugin support (enabled by default)" && \
-    echo "  ✓ FreeRTOS socket compatibility layer (custom)" && \
-    echo "  ✓ Static libraries" && \
-    echo "" && \
-    echo "DISABLED features:" && \
-    echo "  ✗ shared libraries (--disable-shared)" && \
-    echo "  ✗ tests (--disable-tests)" && \
-    echo "  ✗ documentation (--disable-doxygen)" && \
-    echo "  ✗ utilities (--disable-utilities)" && \
-    echo "  ✗ io_uring support (--disable-uring)" && \
-    echo "  ✗ SCTP tests (--disable-sctp-tests)" && \
-    echo "  ✗ io_uring tests (--disable-uring-tests)" && \
-    echo "  ✗ GSMTAP utilities (removed for embedded build)" && \
-    echo "  ✗ TUN/TAP network interfaces (not available in FreeRTOS)" && \
-    echo "===========================================" && \
-    echo "" && \
-    ./configure \
-        --prefix=/tmp/libosmocore-install \
-        --enable-embedded \
-        --enable-pseudotalloc \
-        --disable-shared \
-        --disable-tests \
-        --disable-doxygen \
-        --disable-utilities \
-        --disable-uring \
-        --disable-sctp-tests \
-        --disable-uring-tests && \
-    make -j1 V=1 && \
-    make install && \
-    echo "libosmocore build successful!"
-
-# List built libraries
-RUN ls -la /tmp/libosmocore-install/lib/
-RUN ls -la /tmp/libosmocore-install/include/osmocom/
-EOF
-
-    # Build only libosmocore
-    docker build -f Dockerfile.libosmocore-test -t osmocom-libosmocore-test .
-    
+    docker-compose build osmocom-bb-freertos
     if [ $? -eq 0 ]; then
-        print_success "libosmocore compilation test passed!"
+        print_success "Docker image built successfully (includes libosmocore)"
         echo ""
-        echo "libosmocore built successfully with the following configuration:"
-        echo "  --enable-embedded --disable-uring --disable-libsctp"
+        echo "libosmocore is built automatically as part of the Docker image."
+        echo "It includes:"
+        echo "  ✓ FreeRTOS adaptations"
+        echo "  ✓ Pseudotalloc memory management"
+        echo "  ✓ Socket compatibility layer"
+        echo "  ✓ GSM protocol implementations"
         echo ""
-        echo "You can now proceed with the full build:"
+        echo "Ready to build mobile application with:"
         echo "  ./build.sh build"
-        
-        # Clean up
-        rm -f Dockerfile.libosmocore-test
     else
-        print_error "libosmocore compilation failed"
-        rm -f Dockerfile.libosmocore-test
+        print_error "libosmocore build failed"
+        exit 1
+    fi
+}
+
+build_mobile() {
+    print_header "Building mobile application using autotools"
+    
+    docker-compose build osmocom-bb-freertos
+    if [ $? -eq 0 ]; then
+        print_success "Dependencies ready (libosmocore + FreeRTOS)"
+        
+        # Build mobile application using autotools for FreeRTOS target
+        docker-compose run --rm --entrypoint /bin/bash osmocom-bb-freertos -lc "set -e; \
+            source scripts/freertos_env.sh; \
+            cd src/host/layer23; \
+            autoreconf -fi; \
+            ./configure \$HOST_CONFARGS CFLAGS=\"\$CFLAGS\" LDFLAGS=\"\$LDFLAGS\" PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH\"; \
+            make -j\$(nproc) -C src/mobile mobile"
+        
+        if [ $? -eq 0 ]; then
+            print_success "Mobile application built successfully"
+            echo ""
+            echo "Mobile application available at: src/host/layer23/src/mobile/mobile"
+        else
+            print_error "Mobile application build failed"
+            exit 1
+        fi
+    else
+        print_error "Dependency build failed"
+        exit 1
+    fi
+}
+
+build_nofirmware() {
+    print_header "Building all host applications (nofirmware target)"
+    
+    docker-compose build osmocom-bb-freertos
+    if [ $? -eq 0 ]; then
+        print_success "Dependencies ready (libosmocore + FreeRTOS)"
+        
+        # Build all host applications for FreeRTOS target
+        docker-compose run --rm --entrypoint /bin/bash osmocom-bb-freertos -lc "set -e; \
+            source scripts/freertos_env.sh; \
+            cd src/host/layer23; \
+            autoreconf -fi; \
+            ./configure \$HOST_CONFARGS CFLAGS=\"\$CFLAGS\" LDFLAGS=\"\$LDFLAGS\" PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH\"; \
+            make -j\$(nproc); \
+            echo 'Layer23 applications built for FreeRTOS target'; \
+            cd ../osmocon; \
+            autoreconf -fi; \
+            ./configure; \
+            make -j\$(nproc); \
+            echo 'osmocon built successfully'; \
+            cd ../trxcon; \
+            autoreconf -fi; \
+            ./configure \$HOST_CONFARGS CFLAGS=\"\$CFLAGS\" LDFLAGS=\"\$LDFLAGS\" PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH\"; \
+            make -j\$(nproc); \
+            echo 'trxcon built for FreeRTOS target'"
+        
+        if [ $? -eq 0 ]; then
+            print_success "All host applications built successfully"
+            echo ""
+            echo "Built applications:"
+            echo "  - Mobile: src/host/layer23/src/mobile/mobile"
+            echo "  - osmocon: src/host/osmocon/osmocon"  
+            echo "  - trxcon: src/host/trxcon/trxcon"
+            echo "  - Other Layer23 tools in src/host/layer23/src/"
+        else
+            print_error "Host applications build failed"
+            exit 1
+        fi
+    else
+        print_error "Dependency build failed"
+        exit 1
+    fi
+}
+
+build_layer23() {
+    print_header "Building Layer23 applications (includes mobile)"
+    
+    docker-compose build osmocom-bb-freertos
+    if [ $? -eq 0 ]; then
+        print_success "Dependencies ready (libosmocore + FreeRTOS)"
+        
+        # Build all Layer23 applications (mobile, misc tools, etc.) for FreeRTOS target
+        docker-compose run --rm --entrypoint /bin/bash osmocom-bb-freertos -lc "set -e; \
+            source scripts/freertos_env.sh; \
+            cd src/host/layer23; \
+            autoreconf -fi; \
+            ./configure \$HOST_CONFARGS CFLAGS=\"\$CFLAGS\" LDFLAGS=\"\$LDFLAGS\" PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH\"; \
+            make -j\$(nproc)"
+        
+        if [ $? -eq 0 ]; then
+            print_success "Layer23 applications built successfully"
+            echo ""
+            echo "Built applications:"
+            echo "  - Mobile: src/host/layer23/src/mobile/mobile"
+            echo "  - Misc tools: src/host/layer23/src/misc/"
+            echo "  - Modem: src/host/layer23/src/modem/modem"
+        else
+            print_error "Layer23 build failed"
+            exit 1
+        fi
+    else
+        print_error "Dependency build failed"
         exit 1
     fi
 }
 
 build_all() {
-    print_header "Building OsmocomBB for FreeRTOS and Host"
+    print_header "Building mobile application with all dependencies"
     
-    docker-compose build build
+    docker-compose build osmocom-bb-freertos
     if [ $? -eq 0 ]; then
-        print_success "Build completed successfully"
-        echo ""
-        echo "Built artifacts:"
-        echo "  - FreeRTOS libraries (ARM): /opt/freertos-build/ in container"
-        echo "  - Host applications: Available via /usr/local/bin/ in container"
-        echo ""
-        echo "To extract FreeRTOS artifacts:"
-        echo "  docker-compose run --rm build tar -czf - -C /opt/freertos-build . > freertos-artifacts.tar.gz"
-        echo ""
-        echo "To test host applications:"
-        echo "  ./build.sh test"
+        print_success "Dependencies built successfully (libosmocore + FreeRTOS)"
+        
+        # Build mobile application using autotools for FreeRTOS target
+        print_header "Building mobile application for FreeRTOS"
+        docker-compose run --rm --entrypoint /bin/bash osmocom-bb-freertos -lc "set -euo pipefail; \
+            source scripts/freertos_env.sh; \
+            cd src/host/layer23; \
+            echo '[build] Running autoreconf'; autoreconf -fi; \
+            echo '[build] Configuring layer23 for FreeRTOS'; \
+            ./configure \$HOST_CONFARGS CFLAGS=\"\$CFLAGS\" LDFLAGS=\"\$LDFLAGS\" PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH\"; \
+            echo '[build] Building mobile target'; \
+            make -j\$(nproc) -C src/mobile mobile; \
+            echo 'Mobile application built for FreeRTOS target'"
+        
+        if [ $? -eq 0 ]; then
+            print_success "Mobile application build completed"
+            echo ""
+            echo "Built mobile application:"
+            echo "  - Mobile application: src/host/layer23/src/mobile/mobile"
+            echo "  - Dependencies: libosmocore + FreeRTOS libraries"
+            echo ""
+            echo "To extract mobile application:"
+            echo "  docker-compose run --rm osmocom-bb-freertos tar -czf - src/host/layer23/src/mobile/mobile > mobile-app.tar.gz"
+            echo ""
+            echo "To run mobile application:"
+            echo "  docker-compose run --rm osmocom-bb-freertos \"cd src/host/layer23/src/mobile && ./mobile --help\""
+            echo ""
+            echo "To test mobile application:"
+            echo "  ./build.sh test"
+        else
+            print_error "Mobile application build failed"
+            exit 1
+        fi
     else
-        print_error "Build failed"
+        print_error "Dependency build failed"
         exit 1
     fi
 }
@@ -186,27 +229,26 @@ build_all() {
 enter_shell() {
     print_header "Entering Interactive Shell"
     
-    # Start the container if not running
-    docker-compose up -d build
+    # Build container first if not exists
+    docker-compose build osmocom-bb-freertos
     
     # Enter interactive shell
-    docker-compose exec build bash
+    docker-compose run --rm shell
 }
 
 start_dev() {
     print_header "Starting Development Environment"
     
-    docker-compose up -d dev
+    docker-compose build osmocom-bb-freertos
+    docker-compose run --rm dev
+    
     if [ $? -eq 0 ]; then
-        print_success "Development container started"
+        print_success "Development session completed"
         echo ""
-        echo "To enter the container:"
-        echo "  docker-compose exec dev bash"
-        echo ""
-        echo "Inside the container you can:"
-        echo "  cd build-posix && make        # Build POSIX version"
-        echo "  cd build-freertos && make     # Build FreeRTOS version"
-        echo "  sync-from-refs.sh           # Sync from reference repo"
+        echo "Inside the container you can run:"
+        echo "  mkdir -p build-cmake && cd build-cmake && cmake .. && make"
+        echo "  cd src/host/layer23 && autoreconf -fi && ./configure && make"
+        echo "  ./sync-from-refs.sh           # Sync from reference repo"
     else
         print_error "Failed to start development environment"
         exit 1
@@ -216,6 +258,18 @@ start_dev() {
 clean_build() {
     print_header "Cleaning Build Artifacts"
     
+    # Clean local build directories
+    rm -rf build-posix build-freertos build-test
+    
+    # Clean autotools generated files in source directories
+    docker-compose run --rm osmocom-bb-freertos bash -c "
+        cd src/host/layer23 && make distclean 2>/dev/null || true
+        cd ../osmocon && make distclean 2>/dev/null || true  
+        cd ../trxcon && make distclean 2>/dev/null || true
+        cd ../virt_phy && make distclean 2>/dev/null || true
+    " 2>/dev/null || true
+    
+    # Clean Docker artifacts
     docker-compose down
     docker system prune -f
     docker volume prune -f
@@ -224,32 +278,47 @@ clean_build() {
 }
 
 test_build() {
-    print_header "Testing Built Applications"
+    print_header "Testing mobile application and dependencies"
     
-    # Start the build container
-    docker-compose up -d build
+    # Build container first
+    docker-compose build osmocom-bb-freertos
     
-    # Test basic functionality
-    echo "Testing mobile application..."
-    if docker-compose exec build mobile --help >/dev/null 2>&1; then
-        print_success "Mobile application works"
-    else
-        print_warning "Mobile application test failed"
-    fi
-    
+    # Test libosmocore dependency
     echo "Testing libosmocore availability..."
-    if docker-compose exec build ls /usr/local/lib/libosmo* >/dev/null 2>&1; then
-        print_success "libosmocore libraries installed"
+    if docker-compose run --rm osmocom-bb-freertos bash -lc "pkg-config --exists libosmocore" >/dev/null 2>&1; then
+        print_success "libosmocore libraries available"
     else
         print_warning "libosmocore libraries not found"
     fi
     
-    echo "Testing FreeRTOS artifacts..."
-    if docker-compose exec build ls /opt/freertos-build/ >/dev/null 2>&1; then
-        print_success "FreeRTOS build artifacts available"
-        docker-compose exec build cat /opt/freertos-build/README.txt
+    # Test FreeRTOS headers
+    echo "Testing FreeRTOS headers..."
+    if docker-compose run --rm osmocom-bb-freertos bash -lc "test -f /workspace/deps/freertos/include/kernel/FreeRTOS.h" >/dev/null 2>&1; then
+        print_success "FreeRTOS headers available"
     else
-        print_warning "FreeRTOS artifacts test failed"
+        print_warning "FreeRTOS headers not found"
+    fi
+    
+    # Test mobile application if built
+    echo "Testing mobile application..."
+    if docker-compose run --rm osmocom-bb-freertos bash -lc "test -f src/host/layer23/src/mobile/mobile" >/dev/null 2>&1; then
+        print_success "Mobile application binary found"
+        # Test if it can show help
+    if docker-compose run --rm osmocom-bb-freertos bash -lc "cd src/host/layer23/src/mobile && ./mobile --help" >/dev/null 2>&1; then
+            print_success "Mobile application is executable"
+        else
+            print_warning "Mobile application may have runtime issues"
+        fi
+    else
+        print_warning "Mobile application not found - run './build.sh build' first"
+    fi
+    
+    # Test build environment
+    echo "Testing build environment..."
+    if docker-compose run --rm osmocom-bb-freertos bash -lc "source scripts/freertos_env.sh && echo 'Environment OK'" >/dev/null 2>&1; then
+        print_success "Build environment ready"
+    else
+        print_warning "Build environment test failed"
     fi
     
     print_success "Testing completed"
@@ -260,8 +329,17 @@ case "${1:-}" in
     build)
         build_all
         ;;
+    mobile)
+        build_mobile
+        ;;
+    layer23)
+        build_layer23
+        ;;
+    nofirmware)
+        build_nofirmware
+        ;;
     libosmocore)
-        build_libosmocore_only
+        build_libosmocore
         ;;
     dev)
         start_dev

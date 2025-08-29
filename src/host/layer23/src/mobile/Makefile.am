@@ -1,6 +1,7 @@
 AM_CPPFLAGS = \
 	$(all_includes) \
 	-I$(top_srcdir)/include \
+	-DDISABLE_GSMTAP \
 	$(NULL)
 
 AM_CFLAGS = \
@@ -9,9 +10,6 @@ AM_CFLAGS = \
 	$(LIBOSMOVTY_CFLAGS) \
 	$(LIBOSMOGSM_CFLAGS) \
 	$(LIBOSMOISDN_CFLAGS) \
-	$(LIBOSMOGPRSRLCMAC_CFLAGS) \
-	$(LIBOSMOGPRSLLC_CFLAGS) \
-	$(LIBOSMOGPRSSNDCP_CFLAGS) \
 	$(LIBOSMOCODEC_CFLAGS) \
 	$(LIBOSMOGAPK_CFLAGS) \
 	$(LIBGPS_CFLAGS) \
@@ -41,7 +39,7 @@ libmobile_a_SOURCES = \
 
 bin_PROGRAMS = mobile
 
-mobile_SOURCES = main.c app_mobile.c
+mobile_SOURCES = main.c app_mobile.c pseudotalloc_platform.c log_gsmtap_stub.c
 mobile_LDADD = \
 	libmobile.a \
 	$(top_builddir)/src/common/liblayer23.a \
@@ -49,9 +47,6 @@ mobile_LDADD = \
 	$(LIBOSMOVTY_LIBS) \
 	$(LIBOSMOGSM_LIBS) \
 	$(LIBOSMOISDN_LIBS) \
-	$(LIBOSMOGPRSRLCMAC_LIBS) \
-	$(LIBOSMOGPRSLLC_LIBS) \
-	$(LIBOSMOGPRSSNDCP_LIBS) \
 	$(LIBOSMOCODEC_LIBS) \
 	$(LIBOSMOGAPK_LIBS) \
 	$(LIBGPS_LIBS) \

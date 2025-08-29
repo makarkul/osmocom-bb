@@ -1,49 +1,63 @@
-version: '3.8'
-
 services:
-  # Build environment for FreeRTOS applications on POSIX host
+  osmocom-bb-freertos: &base
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.1.0}
+        FREERTOS_TCP_REF: ${FREERTOS_TCP_REF:-V4.1.0}
+        LIBOSMOCORE_REF: ${LIBOSMOCORE_REF:-freertos-adaptations}
+    image: osmocom-bb:freertos
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace:delegated
+      - freertos-build:/opt/freertos-build
+      - libosmocore-cache:/workspace/deps/libosmocore
+    tty: true
+    stdin_open: true
+    environment:
+      FREERTOS_KERNEL_REF: ${FREERTOS_KERNEL_REF:-V11.1.0}
+      FREERTOS_TCP_REF: ${FREERTOS_TCP_REF:-V4.1.0}
+      LIBOSMOCORE_REF: ${LIBOSMOCORE_REF:-freertos-adaptations}
+      TARGET_FREERTOS: 1
+      TARGET_POSIX: 1
+    command: ["/bin/bash", "-lc", "echo 'Use: docker compose run shell' or 'docker compose run build'"]
+
+  shell:
+    <<: *base
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["source scripts/freertos_env.sh && exec bash"]
+
   build:
-    build:
-      context: .
-      dockerfile: Dockerfile.freertos-posix
-      target: development
-    image: osmocom-bb-freertos:build-env
-    container_name: osmocom-bb-build
-    volumes:
-      - ./configs:/home/osmocom/configs:ro
-      - ./logs:/home/osmocom/logs
-      - build-cache:/workspace/build-host
-      - freertos-cache:/workspace/build-freertos
-    ports:
-      - "4729:4729"  # GSMTAP
-      - "2775:2775"  # L1CTL socket
-    networks:
-      - osmocom
-    command: ["sleep", "infinity"]  # Keep container running for interactive use
+    <<: *base
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["source scripts/freertos_env.sh && mkdir -p build-freertos build-posix && echo 'Build environment ready. Run cmake or make commands as needed.'"]
 
-  # Development environment with source mounted for live editing
   dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.freertos-posix
-      target: development
-    image: osmocom-bb-freertos:dev
-    container_name: osmocom-bb-dev
+    <<: *base
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["source scripts/freertos_env.sh && exec bash"]
     volumes:
-      - .:/workspace-live  # Live source code
-      - dev-build-cache:/workspace-live/build-host
-      - dev-freertos-cache:/workspace-live/build-freertos
-    working_dir: /workspace-live
-    networks:
-      - osmocom
-    command: ["sleep", "infinity"]
+      - ./:/workspace:delegated
+      - freertos-build:/opt/freertos-build
+      - libosmocore-cache:/workspace/deps/libosmocore
+      - dev-home:/root
 
-networks:
-  osmocom:
-    driver: bridge
+  test:
+    <<: *base
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["source scripts/freertos_env.sh && echo 'Running tests...' && echo 'Tests would run here.'"]
 
 volumes:
-  build-cache:
-  freertos-cache:
-  dev-build-cache:
-  dev-freertos-cache:
+  freertos-build:
+    driver: local
+  libosmocore-cache:
+    driver: local  
+  dev-home:
+    driver: local
+
+networks:
+  default:
+    name: osmocom-bb-freertos
+
+name: osmocom-bb-freertos

@@ -47,11 +47,8 @@ PKG_CHECK_MODULES(LIBOSMOVTY, libosmovty >= 0.10.0)
 PKG_CHECK_MODULES(LIBOSMOGSM, libosmogsm)
 PKG_CHECK_MODULES(LIBOSMOISDN, libosmoisdn)
 PKG_CHECK_MODULES(LIBOSMOCODEC, libosmocodec)
-PKG_CHECK_MODULES(LIBOSMOGPRSRLCMAC, libosmo-gprs-rlcmac)
-PKG_CHECK_MODULES(LIBOSMOGPRSLLC, libosmo-gprs-llc)
-PKG_CHECK_MODULES(LIBOSMOGPRSSNDCP, libosmo-gprs-sndcp)
-PKG_CHECK_MODULES(LIBOSMOGPRSGMM, libosmo-gprs-gmm)
-PKG_CHECK_MODULES(LIBOSMOGPRSSM, libosmo-gprs-sm)
+dnl Temporarily remove all GPRS-related library checks (rlcmac, llc, sndcp, gmm, sm)
+dnl to allow building without libosmo-gprs dependencies.
 AC_CHECK_LIB(gps, gps_waiting, LIBGPS_CFLAGS=" -D_HAVE_GPSD" LIBGPS_LIBS=" -lgps ",,)
 AC_SUBST([LIBGPS_CFLAGS])
 AC_SUBST([LIBGPS_LIBS])
@@ -98,16 +95,13 @@ dnl Generate the output
 AM_CONFIG_HEADER(config.h)
 
 AC_OUTPUT(
-    src/Makefile
-    src/common/Makefile
-    src/misc/Makefile
-    src/mobile/Makefile
-    src/modem/Makefile
-    include/Makefile
-    include/osmocom/Makefile
-    include/osmocom/bb/Makefile
-    include/osmocom/bb/common/Makefile
-    include/osmocom/bb/misc/Makefile
-    include/osmocom/bb/mobile/Makefile
-    include/osmocom/bb/modem/Makefile
-    Makefile)
+	src/Makefile
+	src/common/Makefile
+	src/mobile/Makefile
+	include/Makefile
+	include/osmocom/Makefile
+	include/osmocom/bb/Makefile
+	include/osmocom/bb/common/Makefile
+	include/osmocom/bb/misc/Makefile
+	include/osmocom/bb/mobile/Makefile
+	Makefile)
