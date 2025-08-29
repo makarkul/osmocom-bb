@@ -42,3 +42,4 @@ Thumbs.db
 src/shared/libosmocore/
 refs/
 deps/
+src/shared/libosmocore-freertos/
